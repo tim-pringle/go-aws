@@ -4,22 +4,29 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/transcribeservice"
-	"github.com/tim-pringle/go-pkg-utils/misc"
 )
 
 var (
+	//ErrJobnameNotProvided represents when the content of the request is empty
 	ErrJobnameNotProvided = errors.New("No job number has been provided HTTP body")
-	ErrTranscribeRunning  = errors.New("The transcription job is running")
-	ErrTranscribeFailure  = errors.New("The transcription job has failed")
-	ErrJobDoesntExist     = errors.New("The transcripting job does not exist")
+	//ErrTranscribeRunning indicates that a Transcription job is still not completed
+	ErrTranscribeRunning = errors.New("The transcription job is running")
+	//ErrTranscribeFailure signifies an unsuccessful Tanscription job
+	ErrTranscribeFailure = errors.New("The transcription job has failed")
+	//ErrJobDoesntExist advises there is no Transcription job number as provided in the request
+	ErrJobDoesntExist = errors.New("The transcripting job does not exist")
 )
 
 //Convert receives a Transcribe job identifier, retrieves the job data and then converts
@@ -74,13 +81,13 @@ func Convert(jobname string) (string, error) {
 	}
 
 	// initialize our variable to hold the json
-	var awstranscript transcribe.Awstranscript
+	var awstranscript Awstranscript
 
 	// we unmarshal our byteArray which contains our
 	// jsonFile's content into 'awstranscript' which we defined above
 	json.Unmarshal(body, &awstranscript)
 
-	var transcription []transcribe.Item
+	var transcription []Item
 	transcription = awstranscript.Results.Items
 
 	var index, sequence int = 0, 0
@@ -101,7 +108,7 @@ func Convert(jobname string) (string, error) {
 		if err != nil {
 			fmt.Println(err)
 		}
-		sttime = misc.Getsrttime(fsttime)
+		sttime = Getsrttime(fsttime)
 
 		/*Repeat this until we have either reached the last item in results
 		#or the length of the lines we are reading is greater than 64 characters */
@@ -142,7 +149,7 @@ func Convert(jobname string) (string, error) {
 			}
 
 			fsttime, err = strconv.ParseFloat(entime, 64)
-			entime = misc.Getsrttime(fsttime)
+			entime = Getsrttime(fsttime)
 
 			index++
 		}
@@ -159,4 +166,103 @@ func Convert(jobname string) (string, error) {
 	log.Printf(srtinfo)
 
 	return srtinfo, nil
+}
+
+//DownloadFile performs the actions of downloading a file
+func DownloadFile(filepath string, url string) (bool, error) {
+
+	// Create the file
+	out, err := os.Create(filepath)
+	if err != nil {
+		return false, err
+	}
+	defer out.Close()
+
+	// Get the data
+	resp, err := http.Get(url)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	// Write the body to file
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return false, err
+
+	}
+
+	return true, nil
+}
+
+// Getsrttime - Generates an SRT format time string
+func Getsrttime(numerator float64) (timestring string) {
+
+	var h = 3600
+	var m = 60
+	var s = 1
+
+	integer, frac := math.Modf(numerator)
+	integerpart := int(integer)
+
+	hours := integerpart / h
+	remainder := integerpart % h
+
+	minutes := remainder / m
+	remainder = remainder % m
+
+	seconds := remainder / s
+	stringfrac := strconv.FormatFloat(frac, 'f', 3, 64)
+	runes := []rune(stringfrac)
+	safeSubstring := string(runes[1:len(stringfrac)])
+
+	timestring = fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+	timestring += safeSubstring
+	return
+}
+
+//Awstranscript - Top level struc for an AWS transcript job output
+type Awstranscript struct {
+	JobName   string `json:"jobName"`
+	Accountid string `json:"accountId"`
+	Results   Result `json:"results"`
+	Status    string `json:"status"`
+}
+
+//Result - Result structure
+type Result struct {
+	Transcripts []Transcript `json:"transcripts"`
+	Items       []Item       `json:"items"`
+}
+
+//Transcript - Transcription
+type Transcript struct {
+	Transcript string `json:"transcript"`
+}
+
+//Item - Individual translation word/punctuation record
+type Item struct {
+	Starttime      string        `json:"start_time"`
+	Endtime        string        `json:"end_time"`
+	Alternatives   []Alternative `json:"alternatives"`
+	Classification string        `json:"type"`
+}
+
+// Alternative - Actual translated word and confidence of accuracy
+type Alternative struct {
+	Confidence string `json:"confidence"`
+	Content    string `json:"content"`
+}
+
+//GUID - generates a unique identifier
+func GUID() (guid string) {
+	ad, err := time.Parse("02-01-2006", "01-01-1970")
+
+	if err != nil {
+	}
+
+	timesince := time.Since(ad).Nanoseconds()
+	strsince := strconv.FormatInt(timesince, 10)
+	guid = fmt.Sprintf("0" + strsince[0:4] + "-" + strsince[4:9] + "-" + strsince[9:14] + "-" + strsince[14:19])
+	return
 }
