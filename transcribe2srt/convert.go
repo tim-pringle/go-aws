@@ -1,4 +1,4 @@
-package convert
+package transcribe2srt
 
 import (
 	"encoding/json"
@@ -12,8 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/transcribeservice"
-	"github.com/tim-pringle/go-misc/misc"
-	"github.com/tim-pringle/go-transcribe2srt/transcribe"
+	"github.com/tim-pringle/go-pkg-utils/misc"
 )
 
 var (

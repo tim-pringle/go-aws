@@ -1,4 +1,4 @@
-package convert
+package transcribe2srt
 
 import (
 	"fmt"

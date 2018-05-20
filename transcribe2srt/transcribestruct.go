@@ -1,4 +1,4 @@
-package convert
+package transcribe2srt
 
 //Awstranscript - Top level struc for an AWS transcript job output
 type Awstranscript struct {
